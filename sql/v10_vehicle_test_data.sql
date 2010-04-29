@@ -483,3 +483,26 @@ REPLACE INTO npc_spellclick_spells VALUES (33060, 52196, 0, 0, 0, 0);
 REPLACE INTO creature_template_addon VALUES (33060, 0, 0, 0, 0, 0, 336, NULL, NULL); 
 REPLACE INTO vehicle_data VALUES (336, 12, 62345, 62522, 62346, 0, 0, 0, 0, 0, 0, 0, 0);
 REPLACE INTO vehicle_seat_data VALUES (3006, 1);
+
+/* the Oculus */
+DELETE FROM spell_script_target where entry IN (49460, 49346, 49464);
+DELETE FROM npc_spellclick_spells where npc_entry IN (27755, 27692, 27756);
+DELETE FROM creature_template_addon where entry IN (27755, 27692, 27756);
+/* Amber Drake */
+INSERT INTO spell_script_target VALUES (49460, 1, 27755);
+INSERT INTO npc_spellclick_spells VALUES (27755, 49459, 0, 0, 0, 1);
+INSERT INTO creature_template_addon VALUES (27755, 0, 0, 0, 0, 0, 29, NULL, '53112 0 53112 1');
+REPLACE INTO vehicle_data VALUES (29, 12, 49840, 49838, 49592, 0, 0, 0, 0, 0, 0, 0, 0);
+REPLACE INTO vehicle_seat_data VALUES (422, 3);
+/* Emerald Drake */
+INSERT INTO spell_script_target VALUES (49346, 1, 27692);
+INSERT INTO npc_spellclick_spells VALUES (27692, 49427, 0, 0, 0, 1);
+INSERT INTO creature_template_addon VALUES (27692, 0, 0, 0, 0, 0, 39, NULL, '53112 0 53112 1');
+REPLACE INTO vehicle_data VALUES (39, 12, 50328, 50341, 50344, 0, 0, 0, 0, 0, 0, 0, 0);
+REPLACE INTO vehicle_seat_data VALUES (662, 3);
+/* Ruby Drake */
+INSERT INTO spell_script_target VALUES (49464, 1, 27756);
+INSERT INTO npc_spellclick_spells VALUES (27756, 49463, 0, 0, 0, 1);
+INSERT INTO creature_template_addon VALUES (27756, 0, 0, 0, 0, 0, 43, NULL, '53112 0 53112 1');
+REPLACE INTO vehicle_data VALUES (43, 12, 50232, 50248, 50240, 0, 0, 0, 0, 0, 0, 0, 0);
+REPLACE INTO vehicle_seat_data VALUES (742, 3);
