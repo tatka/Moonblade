@@ -22,6 +22,7 @@
 #include "GridDefines.h"
 #include "SharedDefines.h"
 #include "DBCEnums.h"
+#include "ObjectGuid.h"
 
 class WorldSession;
 class Unit;
@@ -52,7 +53,7 @@ enum SpellCastTargetFlags
     TARGET_FLAG_CORPSE          = 0x00008000,               // pguid, resurrection spells
     TARGET_FLAG_UNK2            = 0x00010000,               // pguid, not used in any spells as of 3.0.3 (can be set dynamically)
     TARGET_FLAG_GLYPH           = 0x00020000,               // used in glyph spells
-    TARGET_FLAG_UNK3            = 0x00040000,               // 
+    TARGET_FLAG_UNK3            = 0x00040000,               //
     TARGET_FLAG_UNK4            = 0x00080000                // uint32, loop { vec3, guid -> if guid == 0 break }
 };
 
@@ -232,7 +233,7 @@ enum SpellTargets
     SPELL_TARGETS_AOE_DAMAGE
 };
 
-#define SPELL_SPELL_CHANNEL_UPDATE_INTERVAL (1*IN_MILISECONDS)
+#define SPELL_SPELL_CHANNEL_UPDATE_INTERVAL (1*IN_MILLISECONDS)
 
 typedef std::multimap<uint64, uint64> SpellTargetTimeMap;
 
@@ -359,7 +360,7 @@ class Spell
         void EffectSummonVehicle(SpellEffectIndex eff_idx);
         void EffectDamageBuilding(SpellEffectIndex eff_idx);
 
-        Spell( Unit* Caster, SpellEntry const *info, bool triggered, uint64 originalCasterGUID = 0, Spell** triggeringContainer = NULL );
+        Spell( Unit* caster, SpellEntry const *info, bool triggered, ObjectGuid originalCasterGUID = ObjectGuid(), Spell** triggeringContainer = NULL );
         ~Spell();
 
         void prepare(SpellCastTargets const* targets, Aura* triggeredByAura = NULL);
@@ -387,7 +388,7 @@ class Spell
         SpellCastResult CheckOrTakeRunePower(bool take);
         SpellCastResult CheckCasterAuras() const;
 
-        int32 CalculateDamage(SpellEffectIndex i, Unit* target) { return m_caster->CalculateSpellDamage(m_spellInfo,i,m_currentBasePoints[i],target); }
+        int32 CalculateDamage(SpellEffectIndex i, Unit* target) { return m_caster->CalculateSpellDamage(target, m_spellInfo, i, &m_currentBasePoints[i]); }
         int32 CalculatePowerCost();
 
         bool HaveTargetsForEffect(SpellEffectIndex effect) const;
@@ -437,7 +438,7 @@ class Spell
         //void HandleAddAura(Unit* Target);
 
         SpellEntry const* m_spellInfo;
-        int32 m_currentBasePoints[3];                       // cache SpellEntry::EffectBasePoints and use for set custom base points
+        int32 m_currentBasePoints[MAX_EFFECT_INDEX];        // cache SpellEntry::CalculateSimpleValue and use for set custom base points
         Item* m_CastItem;
         uint8 m_cast_count;
         uint32 m_glyphIndex;
@@ -476,7 +477,7 @@ class Spell
         // formal spell caster, in game source of spell affects cast
         Unit* GetCaster() const { return m_caster; }
         // real source of cast affects, explcit caster, or DoT/HoT applier, or GO owner, etc. Can be NULL
-        Unit* GetAffectiveCaster() const { return m_originalCasterGUID ? m_originalCaster : m_caster; }
+        Unit* GetAffectiveCaster() const { return !m_originalCasterGUID.IsEmpty() ? m_originalCaster : m_caster; }
         // m_originalCasterGUID can store GO guid, and in this case this is visual caster
         WorldObject* GetCastingObject() const;
 
@@ -502,7 +503,7 @@ class Spell
 
         Unit* m_caster;
 
-        uint64 m_originalCasterGUID;                        // real source of cast (aura caster/etc), used for spell targets selection
+        ObjectGuid m_originalCasterGUID;                    // real source of cast (aura caster/etc), used for spell targets selection
                                                             // e.g. damage around area spell trigered by victim aura and da,age emeies of aura caster
         Unit* m_originalCaster;                             // cached pointer for m_originalCaster, updated at Spell::UpdatePointers()
 
@@ -572,8 +573,10 @@ class Spell
         // Targets store structures and data
         struct TargetInfo
         {
-            uint64 targetGUID;
+            ObjectGuid targetGUID;
             uint64 timeDelay;
+            uint32 HitInfo;
+            uint32 damage;
             SpellMissInfo missCondition:8;
             SpellMissInfo reflectResult:8;
             uint8  effectMask:8;
@@ -584,7 +587,7 @@ class Spell
 
         struct GOTargetInfo
         {
-            uint64 targetGUID;
+            ObjectGuid targetGUID;
             uint64 timeDelay;
             uint8  effectMask:8;
             bool   processed:1;
@@ -604,6 +607,8 @@ class Spell
         void AddGOTarget(uint64 goGUID, SpellEffectIndex effIndex);
         void AddItemTarget(Item* target, SpellEffectIndex effIndex);
         void DoAllEffectOnTarget(TargetInfo *target);
+        void HandleDelayedSpellLaunch(TargetInfo *target);
+        void InitializeDamageMultipliers();
         void DoSpellHitOnUnit(Unit *unit, uint32 effectMask);
         void DoAllEffectOnTarget(GOTargetInfo *target);
         void DoAllEffectOnTarget(ItemTargetInfo *target);
@@ -696,7 +701,7 @@ namespace MaNGOS
 
         template<class T> inline void Visit(GridRefManager<T>  &m)
         {
-            assert(i_data);
+            ASSERT(i_data);
 
             if(!i_originalCaster)
                 return;

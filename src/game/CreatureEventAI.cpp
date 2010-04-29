@@ -424,7 +424,7 @@ void CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
             m_creature->PlayDirectSound(action.sound.soundId);
             break;
         case ACTION_T_EMOTE:
-            m_creature->HandleEmoteCommand(action.emote.emoteId);
+            m_creature->HandleEmote(action.emote.emoteId);
             break;
         case ACTION_T_RANDOM_SOUND:
         {
@@ -437,7 +437,7 @@ void CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
         {
             int32 temp = GetRandActionParam(rnd, action.random_emote.emoteId1, action.random_emote.emoteId2, action.random_emote.emoteId3);
             if (temp >= 0)
-                m_creature->HandleEmoteCommand(temp);
+                m_creature->HandleEmote(temp);
             break;
         }
         case ACTION_T_CAST:
@@ -542,7 +542,7 @@ void CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
         case ACTION_T_CAST_EVENT:
             if (Unit* target = GetTargetByType(action.cast_event.target, pActionInvoker))
                 if (target->GetTypeId() == TYPEID_PLAYER)
-                    ((Player*)target)->CastedCreatureOrGO(action.cast_event.creatureId, m_creature->GetGUID(), action.cast_event.spellId);
+                    ((Player*)target)->CastedCreatureOrGO(action.cast_event.creatureId, m_creature->GetObjectGuid(), action.cast_event.spellId);
             break;
         case ACTION_T_SET_UNIT_FIELD:
         {
@@ -643,7 +643,7 @@ void CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
             for (ThreatList::const_iterator i = threatList.begin(); i != threatList.end(); ++i)
                 if (Unit* Temp = Unit::GetUnit(*m_creature,(*i)->getUnitGuid()))
                     if (Temp->GetTypeId() == TYPEID_PLAYER)
-                        ((Player*)Temp)->CastedCreatureOrGO(action.cast_event_all.creatureId, m_creature->GetGUID(), action.cast_event_all.spellId);
+                        ((Player*)Temp)->CastedCreatureOrGO(action.cast_event_all.creatureId, m_creature->GetObjectGuid(), action.cast_event_all.spellId);
             break;
         }
         case ACTION_T_REMOVEAURASFROMSPELL:
@@ -711,7 +711,7 @@ void CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
             break;
         case ACTION_T_SET_INST_DATA:
         {
-            InstanceData* pInst = (InstanceData*)m_creature->GetInstanceData();
+            InstanceData* pInst = m_creature->GetInstanceData();
             if (!pInst)
             {
                 sLog.outErrorDb("CreatureEventAI: Event %d attempt to set instance data without instance script. Creature %d", EventId, m_creature->GetEntry());
@@ -730,7 +730,7 @@ void CreatureEventAI::ProcessAction(CreatureEventAI_Action const& action, uint32
                 return;
             }
 
-            InstanceData* pInst = (InstanceData*)m_creature->GetInstanceData();
+            InstanceData* pInst = m_creature->GetInstanceData();
             if (!pInst)
             {
                 sLog.outErrorDb("CreatureEventAI: Event %d attempt to set instance data64 without instance script. Creature %d", EventId, m_creature->GetEntry());
@@ -1226,11 +1226,6 @@ inline Unit* CreatureEventAI::GetTargetByType(uint32 Target, Unit* pActionInvoke
 
 Unit* CreatureEventAI::DoSelectLowestHpFriendly(float range, uint32 MinHPDiff)
 {
-    CellPair p(MaNGOS::ComputeCellPair(m_creature->GetPositionX(), m_creature->GetPositionY()));
-    Cell cell(p);
-    cell.data.Part.reserved = ALL_DISTRICT;
-    cell.SetNoCreate();
-
     Unit* pUnit = NULL;
 
     MaNGOS::MostHPMissingInRange u_check(m_creature, range, MinHPDiff);
@@ -1240,40 +1235,22 @@ Unit* CreatureEventAI::DoSelectLowestHpFriendly(float range, uint32 MinHPDiff)
     typedef TYPELIST_4(GameObject, Creature*except pets*, DynamicObject, Corpse*Bones*) AllGridObjectTypes;
     This means that if we only search grid then we cannot possibly return pets or players so this is safe
     */
-    TypeContainerVisitor<MaNGOS::UnitLastSearcher<MaNGOS::MostHPMissingInRange>, GridTypeMapContainer >  grid_unit_searcher(searcher);
-
-    cell.Visit(p, grid_unit_searcher, *m_creature->GetMap(), *m_creature, range);
+    Cell::VisitGridObjects(m_creature, searcher, range);
     return pUnit;
 }
 
 void CreatureEventAI::DoFindFriendlyCC(std::list<Creature*>& _list, float range)
 {
-    CellPair p(MaNGOS::ComputeCellPair(m_creature->GetPositionX(), m_creature->GetPositionY()));
-    Cell cell(p);
-    cell.data.Part.reserved = ALL_DISTRICT;
-    cell.SetNoCreate();
-
     MaNGOS::FriendlyCCedInRange u_check(m_creature, range);
     MaNGOS::CreatureListSearcher<MaNGOS::FriendlyCCedInRange> searcher(m_creature, _list, u_check);
-
-    TypeContainerVisitor<MaNGOS::CreatureListSearcher<MaNGOS::FriendlyCCedInRange>, GridTypeMapContainer >  grid_creature_searcher(searcher);
-
-    cell.Visit(p, grid_creature_searcher, *m_creature->GetMap(), *m_creature, range);
+    Cell::VisitGridObjects(m_creature, searcher, range);
 }
 
 void CreatureEventAI::DoFindFriendlyMissingBuff(std::list<Creature*>& _list, float range, uint32 spellid)
 {
-    CellPair p(MaNGOS::ComputeCellPair(m_creature->GetPositionX(), m_creature->GetPositionY()));
-    Cell cell(p);
-    cell.data.Part.reserved = ALL_DISTRICT;
-    cell.SetNoCreate();
-
     MaNGOS::FriendlyMissingBuffInRange u_check(m_creature, range, spellid);
     MaNGOS::CreatureListSearcher<MaNGOS::FriendlyMissingBuffInRange> searcher(m_creature, _list, u_check);
-
-    TypeContainerVisitor<MaNGOS::CreatureListSearcher<MaNGOS::FriendlyMissingBuffInRange>, GridTypeMapContainer >  grid_creature_searcher(searcher);
-
-    cell.Visit(p, grid_creature_searcher, *m_creature->GetMap(), *m_creature, range);
+    Cell::VisitGridObjects(m_creature,searcher, range);
 }
 
 //*********************************
@@ -1315,7 +1292,7 @@ void CreatureEventAI::DoScriptText(int32 textEntry, WorldObject* pSource, Unit* 
     {
         if (pSource->GetTypeId() == TYPEID_UNIT || pSource->GetTypeId() == TYPEID_PLAYER)
         {
-            ((Unit*)pSource)->HandleEmoteCommand((*i).second.Emote);
+            ((Unit*)pSource)->HandleEmote((*i).second.Emote);
         }
         else
             sLog.outErrorDb("CreatureEventAI: DoScriptText entry %i tried to process emote for invalid TypeId (%u).",textEntry,pSource->GetTypeId());

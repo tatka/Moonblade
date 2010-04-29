@@ -36,15 +36,6 @@ class Player;
 
 namespace MaNGOS
 {
-
-    struct MANGOS_DLL_DECL PlayerNotifier
-    {
-        explicit PlayerNotifier(Player &pl) : i_player(pl) {}
-        void Visit(PlayerMapType &);
-        template<class SKIP> void Visit(GridRefManager<SKIP> &) {}
-        Player &i_player;
-    };
-
     struct MANGOS_DLL_DECL VisibleNotifier
     {
         Player &i_player;
@@ -55,7 +46,6 @@ namespace MaNGOS
 
         explicit VisibleNotifier(Player &player) : i_player(player),i_clientGUIDs(player.m_clientGUIDs) {}
         template<class T> void Visit(GridRefManager<T> &m);
-        void Visit(PlayerMapType &);
         void Notify(void);
     };
 
@@ -93,6 +83,19 @@ namespace MaNGOS
         WorldPacket *i_message;
         bool i_toSelf;
         MessageDeliverer(Player &pl, WorldPacket *msg, bool to_self) : i_player(pl), i_message(msg), i_toSelf(to_self) {}
+        void Visit(PlayerMapType &m);
+        template<class SKIP> void Visit(GridRefManager<SKIP> &) {}
+    };
+
+    struct MessageDelivererExcept
+    {
+        uint32        i_phaseMask;
+        WorldPacket*  i_message;
+        Player const* i_skipped_receiver;
+
+        MessageDelivererExcept(WorldObject const* obj, WorldPacket *msg, Player const* skipped)
+            : i_phaseMask(obj->GetPhaseMask()), i_message(msg), i_skipped_receiver(skipped) {}
+
         void Visit(PlayerMapType &m);
         template<class SKIP> void Visit(GridRefManager<SKIP> &) {}
     };

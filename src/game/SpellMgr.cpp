@@ -1399,6 +1399,10 @@ bool SpellMgr::IsNoStackSpellDueToSpell(uint32 spellId_1, uint32 spellId_2) cons
                         (spellInfo_2->Id == 8326 && spellInfo_1->Id == 20584) )
                          return false;
 
+                    // Kindred Spirits
+                    if( spellInfo_1->SpellIconID == 3559 && spellInfo_2->SpellIconID == 3559 )
+                        return false;
+
                     break;
                 }
                 case SPELLFAMILY_MAGE:
@@ -2113,15 +2117,16 @@ void SpellMgr::LoadSpellLearnSkills()
 
         for(int i = 0; i < MAX_EFFECT_INDEX; ++i)
         {
-            if(entry->Effect[i]==SPELL_EFFECT_SKILL)
+            if(entry->Effect[i] == SPELL_EFFECT_SKILL)
             {
                 SpellLearnSkillNode dbc_node;
                 dbc_node.skill    = entry->EffectMiscValue[i];
+                dbc_node.step     = entry->CalculateSimpleValue(SpellEffectIndex(i));
                 if ( dbc_node.skill != SKILL_RIDING )
                     dbc_node.value = 1;
                 else
-                    dbc_node.value = entry->CalculateSimpleValue(SpellEffectIndex(i))*75;
-                dbc_node.maxvalue = entry->CalculateSimpleValue(SpellEffectIndex(i))*75;
+                    dbc_node.value = dbc_node.step * 75;
+                dbc_node.maxvalue = dbc_node.step * 75;
 
                 mSpellLearnSkills[spell] = dbc_node;
                 ++dbc_count;
@@ -2553,7 +2558,7 @@ bool LoadPetDefaultSpells_helper(CreatureInfo const* cInfo, PetDefaultSpellsEntr
 
 void SpellMgr::LoadPetDefaultSpells()
 {
-    assert(MAX_CREATURE_SPELL_DATA_SLOT==CREATURE_MAX_SPELLS);
+    ASSERT(MAX_CREATURE_SPELL_DATA_SLOT==CREATURE_MAX_SPELLS);
 
     mPetDefaultSpellsMap.clear();
 
@@ -2959,8 +2964,8 @@ SpellCastResult SpellMgr::GetSpellAllowedInLocationError(SpellEntry const *spell
             return SPELL_FAILED_INCORRECT_AREA;
     }
 
-    // continent limitation (virtual continent)
-    if (spellInfo->AttributesEx4 & SPELL_ATTR_EX4_CAST_ONLY_IN_OUTLAND)
+    // continent limitation (virtual continent), ignore for GM
+    if ((spellInfo->AttributesEx4 & SPELL_ATTR_EX4_CAST_ONLY_IN_OUTLAND) && !(player && player->isGameMaster()))
     {
         uint32 v_map = GetVirtualMapForMapAndZone(map_id, zone_id);
         MapEntry const* mapEntry = sMapStore.LookupEntry(v_map);
@@ -2994,7 +2999,7 @@ SpellCastResult SpellMgr::GetSpellAllowedInLocationError(SpellEntry const *spell
     // - with SPELL_ATTR_EX4_NOT_USABLE_IN_ARENA flag
     // - with greater than 15 min CD
     if ((spellInfo->AttributesEx4 & SPELL_ATTR_EX4_NOT_USABLE_IN_ARENA) ||
-         (GetSpellRecoveryTime(spellInfo) > 15 * MINUTE * IN_MILISECONDS && !(spellInfo->AttributesEx4 & SPELL_ATTR_EX4_USABLE_IN_ARENA)))
+         (GetSpellRecoveryTime(spellInfo) > 15 * MINUTE * IN_MILLISECONDS && !(spellInfo->AttributesEx4 & SPELL_ATTR_EX4_USABLE_IN_ARENA)))
         if (player && player->InArena())
             return SPELL_FAILED_NOT_IN_ARENA;
 
@@ -3407,11 +3412,8 @@ DiminishingGroup GetDiminishingReturnsGroupForSpell(SpellEntry const* spellproto
         }
         case SPELLFAMILY_PRIEST:
         {
-            // Vampiric Embrace
-            if ((spellproto->SpellFamilyFlags & UI64LIT(0x00000000004)) && spellproto->SpellIconID == 150)
-                return DIMINISHING_LIMITONLY;
             // Shackle Undead
-            else if (spellproto->SpellIconID == 27)
+            if (spellproto->SpellIconID == 27)
                 return DIMINISHING_DISORIENT;
             break;
         }
@@ -3480,13 +3482,6 @@ int32 GetDiminishingReturnsLimitDuration(DiminishingGroup group, SpellEntry cons
             // Faerie Fire - limit to 40 seconds in PvP (3.1)
             if (spellproto->SpellFamilyFlags & UI64LIT(0x00000000400))
                 return 40000;
-            break;
-        }
-        case SPELLFAMILY_PRIEST:
-        {
-            // Vampiric Embrace - limit to 60 seconds in PvP (3.1)
-            if ((spellproto->SpellFamilyFlags & UI64LIT(0x00000000004)) && spellproto->SpellIconID == 150)
-                return 60000;
             break;
         }
         default:
@@ -3595,4 +3590,18 @@ bool SpellArea::IsFitToRequirements(Player const* player, uint32 newZone, uint32
     }
 
     return true;
+}
+
+SpellEntry const* GetSpellEntryByDifficulty(uint32 id, Difficulty difficulty)
+{
+    SpellDifficultyEntry const* spellDiff = sSpellDifficultyStore.LookupEntry(id);
+
+    if (!spellDiff)
+        return NULL;
+
+    if (!spellDiff->spellId[difficulty])
+        return NULL;
+
+    SpellEntry const* spellEntry = sSpellStore.LookupEntry(spellDiff->spellId[difficulty]);
+    return spellEntry;
 }

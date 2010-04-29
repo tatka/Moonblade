@@ -188,14 +188,11 @@ public:
 
 struct InstanceTemplate
 {
-    uint32 map;
-    uint32 parent;
+    uint32 map;                                             // instance map
+    uint32 parent;                                          // non-continent parent instance (for instance with entrance in another instances)
+                                                            // or 0 (not related to continent 0 map id)
     uint32 levelMin;
     uint32 levelMax;
-    float startLocX;
-    float startLocY;
-    float startLocZ;
-    float startLocO;
     uint32 script_id;
 };
 
@@ -320,7 +317,7 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>, public MaNGOS::Obj
 
         bool CreatureRespawnRelocation(Creature *c);        // used only in CreatureRelocation and ObjectGridUnloader
 
-        // assert print helper
+        // ASSERT print helper
         bool CheckGridIntegrity(Creature* c, bool moved) const;
 
         uint32 GetInstanceId() const { return i_InstanceId; }
@@ -346,24 +343,10 @@ class MANGOS_DLL_SPEC Map : public GridRefManager<NGridType>, public MaNGOS::Obj
         bool IsBattleGround() const { return i_mapEntry && i_mapEntry->IsBattleGround(); }
         bool IsBattleArena() const { return i_mapEntry && i_mapEntry->IsBattleArena(); }
         bool IsBattleGroundOrArena() const { return i_mapEntry && i_mapEntry->IsBattleGroundOrArena(); }
-        bool GetEntrancePos(int32 &mapid, float &x, float &y)
-        {
-            if(!i_mapEntry)
-                return false;
-            if(i_mapEntry->entrance_map < 0)
-                return false;
-            mapid = i_mapEntry->entrance_map;
-            x = i_mapEntry->entrance_x;
-            y = i_mapEntry->entrance_y;
-            return true;
-        }
 
         void AddObjectToRemoveList(WorldObject *obj);
 
-        virtual bool RemoveBones(uint64 guid, float x, float y);
-
         void UpdateObjectVisibility(WorldObject* obj, Cell cell, CellPair cellpair);
-        void UpdatePlayerVisibility(Player* player, Cell cell, CellPair cellpair);
         void UpdateObjectsVisibilityFor(Player* player, Cell cell, CellPair cellpair);
 
         void resetMarkedCells() { marked_cells.reset(); }

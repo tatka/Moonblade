@@ -78,20 +78,15 @@ void GameObject::RemoveFromWorld()
     if(IsInWorld())
     {
         // Remove GO from owner
-        if(uint64 owner_guid = GetOwnerGUID())
+        ObjectGuid owner_guid = GetOwnerGUID();
+        if (!owner_guid.IsEmpty())
         {
             if (Unit* owner = ObjectAccessor::GetUnit(*this,owner_guid))
                 owner->RemoveGameObject(this,false);
             else
             {
-                const char * ownerType = "creature";
-                if(IS_PLAYER_GUID(owner_guid))
-                    ownerType = "player";
-                else if(IS_PET_GUID(owner_guid))
-                    ownerType = "pet";
-
-                sLog.outError("Delete GameObject (GUID: %u Entry: %u SpellId %u LinkedGO %u) that lost references to owner (GUID %u Type '%s') GO list. Crash possible later.",
-                    GetGUIDLow(), GetGOInfo()->id, m_spellId, GetGOInfo()->GetLinkedGameObjectEntry(), GUID_LOPART(owner_guid), ownerType);
+                sLog.outError("Delete %s with SpellId %u LinkedGO %u that lost references to owner %s GO list. Crash possible later.",
+                    GetObjectGuid().GetString().c_str(), m_spellId, GetGOInfo()->GetLinkedGameObjectEntry(), owner_guid.GetString().c_str());
             }
         }
 
@@ -164,7 +159,7 @@ bool GameObject::Create(uint32 guidlow, uint32 name_id, Map *map, uint32 phaseMa
 
 void GameObject::Update(uint32 /*p_time*/)
 {
-    if (IS_MO_TRANSPORT(GetGUID()))
+    if (GetObjectGuid().IsMOTransport())
     {
         //((Transport*)this)->Update(p_time);
         return;
@@ -294,26 +289,15 @@ void GameObject::Update(uint32 /*p_time*/)
                         }
                     }
 
-                    CellPair p(MaNGOS::ComputeCellPair(GetPositionX(),GetPositionY()));
-                    Cell cell(p);
-                    cell.data.Part.reserved = ALL_DISTRICT;
-
                     // Note: this hack with search required until GO casting not implemented
                     // search unfriendly creature
                     if(owner && goInfo->trap.charges > 0)       // hunter trap
                     {
                         MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck u_check(this, owner, radius);
                         MaNGOS::UnitSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck> checker(this,ok, u_check);
-
-                        TypeContainerVisitor<MaNGOS::UnitSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck>, GridTypeMapContainer > grid_object_checker(checker);
-                        cell.Visit(p, grid_object_checker, *GetMap(), *this, radius);
-
-                        // or unfriendly player/pet
+                        Cell::VisitGridObjects(this,checker, radius);
                         if(!ok)
-                        {
-                            TypeContainerVisitor<MaNGOS::UnitSearcher<MaNGOS::AnyUnfriendlyUnitInObjectRangeCheck>, WorldTypeMapContainer > world_object_checker(checker);
-                            cell.Visit(p, world_object_checker, *GetMap(), *this, radius);
-                        }
+                            Cell::VisitWorldObjects(this,checker, radius);
                     }
                     else                                        // environmental trap
                     {
@@ -323,9 +307,7 @@ void GameObject::Update(uint32 /*p_time*/)
                         Player* p_ok = NULL;
                         MaNGOS::AnyPlayerInObjectRangeCheck p_check(this, radius);
                         MaNGOS::PlayerSearcher<MaNGOS::AnyPlayerInObjectRangeCheck>  checker(this,p_ok, p_check);
-
-                        TypeContainerVisitor<MaNGOS::PlayerSearcher<MaNGOS::AnyPlayerInObjectRangeCheck>, WorldTypeMapContainer > world_object_checker(checker);
-                        cell.Visit(p, world_object_checker, *GetMap(), *this, radius);
+                        Cell::VisitWorldObjects(this,checker, radius);
                         ok = p_ok;
                     }
 
@@ -814,15 +796,10 @@ void GameObject::TriggeringLinkedGameObject( uint32 trapEntry, Unit* target)
     GameObject* trapGO = NULL;
     {
         // using original GO distance
-        CellPair p(MaNGOS::ComputeCellPair(GetPositionX(), GetPositionY()));
-        Cell cell(p);
-        cell.data.Part.reserved = ALL_DISTRICT;
-
         MaNGOS::NearestGameObjectEntryInObjectRangeCheck go_check(*target,trapEntry,range);
         MaNGOS::GameObjectLastSearcher<MaNGOS::NearestGameObjectEntryInObjectRangeCheck> checker(this, trapGO,go_check);
 
-        TypeContainerVisitor<MaNGOS::GameObjectLastSearcher<MaNGOS::NearestGameObjectEntryInObjectRangeCheck>, GridTypeMapContainer > object_checker(checker);
-        cell.Visit(p, object_checker, *GetMap(), *target, range);
+        Cell::VisitGridObjects(this, checker, range);
     }
 
     // found correct GO
@@ -835,14 +812,9 @@ GameObject* GameObject::LookupFishingHoleAround(float range)
 {
     GameObject* ok = NULL;
 
-    CellPair p(MaNGOS::ComputeCellPair(GetPositionX(),GetPositionY()));
-    Cell cell(p);
-    cell.data.Part.reserved = ALL_DISTRICT;
     MaNGOS::NearestGameObjectFishingHole u_check(*this, range);
     MaNGOS::GameObjectSearcher<MaNGOS::NearestGameObjectFishingHole> checker(this, ok, u_check);
-
-    TypeContainerVisitor<MaNGOS::GameObjectSearcher<MaNGOS::NearestGameObjectFishingHole>, GridTypeMapContainer > grid_object_checker(checker);
-    cell.Visit(p, grid_object_checker, *GetMap(), *this, range);
+    Cell::VisitGridObjects(this,checker, range);
 
     return ok;
 }
@@ -1058,7 +1030,7 @@ void GameObject::Use(Unit* user)
                         break;
                 }
 
-                player->CastedCreatureOrGO(info->id, GetGUID(), 0);
+                player->CastedCreatureOrGO(info->id, GetObjectGuid(), 0);
             }
 
             if (uint32 trapEntry = info->goober.linkedTrapId)

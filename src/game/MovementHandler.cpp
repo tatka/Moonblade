@@ -179,7 +179,7 @@ void WorldSession::HandleMoveTeleportAck(WorldPacket& recv_data)
     uint32 flags, time;
     recv_data >> flags >> time;
     DEBUG_LOG("Guid: %s", guid.GetString().c_str());
-    DEBUG_LOG("Flags %u, time %u", flags, time/IN_MILISECONDS);
+    DEBUG_LOG("Flags %u, time %u", flags, time/IN_MILLISECONDS);
 
     Unit *mover = _player->m_mover;
     Player *plMover = mover->GetTypeId() == TYPEID_PLAYER ? (Player*)mover : NULL;
@@ -271,7 +271,7 @@ void WorldSession::HandleMovementOpcodes( WorldPacket & recv_data )
             // elevators also cause the client to send MOVEFLAG_ONTRANSPORT - just unmount if the guid can be found in the transport list
             for (MapManager::TransportSet::const_iterator iter = sMapMgr.m_Transports.begin(); iter != sMapMgr.m_Transports.end(); ++iter)
             {
-                if ((*iter)->GetGUID() == movementInfo.GetTransportGuid())
+                if ((*iter)->GetObjectGuid() == movementInfo.GetTransportGuid())
                 {
                     plMover->m_transport = (*iter);
                     (*iter)->AddPassenger(plMover);
@@ -284,7 +284,7 @@ void WorldSession::HandleMovementOpcodes( WorldPacket & recv_data )
     {
         plMover->m_transport->RemovePassenger(plMover);
         plMover->m_transport = NULL;
-        movementInfo.SetTransportData(0, 0.0f, 0.0f, 0.0f, 0.0f, 0, -1);
+        movementInfo.ClearTransportData();
     }
 
     // fall damage generation (ignore in flight case that can be triggered also at lags in moment teleportation to another map).
@@ -316,7 +316,7 @@ void WorldSession::HandleMovementOpcodes( WorldPacket & recv_data )
     WorldPacket data(opcode, recv_data.size());
     data.appendPackGUID(mover->GetGUID());                  // write guid
     movementInfo.Write(data);                               // write data
-    GetPlayer()->SendMessageToSet(&data, false);
+    mover->SendMessageToSetExcept(&data, _player);
 
     if(plMover)                                             // nothing is charmed, or player charmed
     {

@@ -126,6 +126,7 @@ SpellCategoryStore sSpellCategoryStore;
 PetFamilySpellsStore sPetFamilySpellsStore;
 
 DBCStorage <SpellCastTimesEntry> sSpellCastTimesStore(SpellCastTimefmt);
+DBCStorage <SpellDifficultyEntry> sSpellDifficultyStore(SpellDifficultyfmt);
 DBCStorage <SpellDurationEntry> sSpellDurationStore(SpellDurationfmt);
 DBCStorage <SpellFocusObjectEntry> sSpellFocusObjectStore(SpellFocusObjectfmt);
 DBCStorage <SpellRadiusEntry> sSpellRadiusStore(SpellRadiusfmt);
@@ -149,7 +150,7 @@ TaxiMask sOldContinentsNodesMask;
 TaxiPathSetBySource sTaxiPathSetBySource;
 DBCStorage <TaxiPathEntry> sTaxiPathStore(TaxiPathEntryfmt);
 
-// DBC used only for initialization sTaxiPathNodeStore at startup.
+// DBC store data but sTaxiPathNodesByPath used for fast access to entries (it's not owner pointed data).
 TaxiPathNodesByPath sTaxiPathNodesByPath;
 static DBCStorage <TaxiPathNodeEntry> sTaxiPathNodeStore(TaxiPathNodeEntryfmt);
 
@@ -233,7 +234,7 @@ static bool LoadDBC_assert_print(uint32 fsize,uint32 rsize, const std::string& f
 {
     sLog.outError("ERROR: Size of '%s' setted by format string (%u) not equal size of C++ structure (%u).",filename.c_str(),fsize,rsize);
 
-    // assert must fail after function call
+    // ASSERT must fail after function call
     return false;
 }
 
@@ -251,7 +252,7 @@ template<class T>
 inline void LoadDBC(LocalData& localeData,barGoLink& bar, StoreProblemList& errlist, DBCStorage<T>& storage, const std::string& dbc_path, const std::string& filename)
 {
     // compatibility format and C++ structure sizes
-    assert(DBCFileLoader::GetFormatRecordSize(storage.GetFormat()) == sizeof(T) || LoadDBC_assert_print(DBCFileLoader::GetFormatRecordSize(storage.GetFormat()),sizeof(T),filename));
+    ASSERT(DBCFileLoader::GetFormatRecordSize(storage.GetFormat()) == sizeof(T) || LoadDBC_assert_print(DBCFileLoader::GetFormatRecordSize(storage.GetFormat()),sizeof(T),filename));
 
     std::string dbc_filename = dbc_path + filename;
     if(storage.Load(dbc_filename.c_str()))
@@ -323,7 +324,7 @@ void LoadDBCStores(const std::string& dataPath)
         exit(1);
     }
 
-    const uint32 DBCFilesCount = 84;
+    const uint32 DBCFilesCount = 85;
 
     barGoLink bar( (int)DBCFilesCount );
 
@@ -429,7 +430,7 @@ void LoadDBCStores(const std::string& dataPath)
     for(uint32 i = 0; i < sPvPDifficultyStore.GetNumRows(); ++i)
         if (PvPDifficultyEntry const* entry = sPvPDifficultyStore.LookupEntry(i))
             if (entry->bracketId > MAX_BATTLEGROUND_BRACKETS)
-                assert(false && "Need update MAX_BATTLEGROUND_BRACKETS by DBC data");
+                ASSERT(false && "Need update MAX_BATTLEGROUND_BRACKETS by DBC data");
 
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sRandomPropertiesPointsStore, dbcPath,"RandPropPoints.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sScalingStatDistributionStore, dbcPath,"ScalingStatDistribution.dbc");
@@ -478,6 +479,7 @@ void LoadDBCStores(const std::string& dataPath)
 
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sSpellCastTimesStore,      dbcPath,"SpellCastTimes.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sSpellDurationStore,       dbcPath,"SpellDuration.dbc");
+    LoadDBC(availableDbcLocales,bar,bad_dbc_files,sSpellDifficultyStore,     dbcPath,"SpellDifficulty.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sSpellFocusObjectStore,    dbcPath,"SpellFocusObject.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sSpellItemEnchantmentStore,dbcPath,"SpellItemEnchantment.dbc");
     LoadDBC(availableDbcLocales,bar,bad_dbc_files,sSpellItemEnchantmentConditionStore,dbcPath,"SpellItemEnchantmentCondition.dbc");
@@ -545,11 +547,10 @@ void LoadDBCStores(const std::string& dataPath)
     sTaxiPathNodesByPath.resize(pathCount);                 // 0 and some other indexes not used
     for(uint32 i = 1; i < sTaxiPathNodesByPath.size(); ++i)
         sTaxiPathNodesByPath[i].resize(pathLength[i]);
-    // fill data
+    // fill data (pointers to sTaxiPathNodeStore elements
     for(uint32 i = 1; i < sTaxiPathNodeStore.GetNumRows(); ++i)
         if(TaxiPathNodeEntry const* entry = sTaxiPathNodeStore.LookupEntry(i))
-            sTaxiPathNodesByPath[entry->path][entry->index] = TaxiPathNode(entry->mapid,entry->x,entry->y,entry->z,entry->actionFlag,entry->delay);
-    sTaxiPathNodeStore.Clear();
+            sTaxiPathNodesByPath[entry->path][entry->index] = entry;
 
     // Initialize global taxinodes mask
     // include existed nodes that have at least single not spell base (scripted) path
@@ -622,13 +623,13 @@ void LoadDBCStores(const std::string& dataPath)
     }
 
     // Check loaded DBC files proper version
-    if( !sSpellStore.LookupEntry(74445)            ||       // last added spell in 3.3.2
-        !sMapStore.LookupEntry(718)                ||       // last map added in 3.3.2
-        !sGemPropertiesStore.LookupEntry(1629)     ||       // last gem property added in 3.3.2
-        !sItemExtendedCostStore.LookupEntry(2982)  ||       // last item extended cost added in 3.3.2
-        !sCharTitlesStore.LookupEntry(177)         ||       // last char title added in 3.3.2
-        !sAreaStore.LookupEntry(3461)              ||       // last area (areaflag) added in 3.3.2
-        !sItemStore.LookupEntry(52686)             )        // last client known item added in 3.3.2
+    if( !sAreaStore.LookupEntry(3617)              ||       // last area (areaflag) added in 3.3.3a
+        !sCharTitlesStore.LookupEntry(177)         ||       // last char title added in 3.3.3a
+        !sGemPropertiesStore.LookupEntry(1629)     ||       // last gem property added in 3.3.3a
+        !sItemStore.LookupEntry(54860)             ||       // last client known item added in 3.3.3a
+        !sItemExtendedCostStore.LookupEntry(2997)  ||       // last item extended cost added in 3.3.3a
+        !sMapStore.LookupEntry(724)                ||       // last map added in 3.3.3a
+        !sSpellStore.LookupEntry(76567)            )        // last added spell in 3.3.3a
     {
         sLog.outError("\nYou have mixed version DBC files. Please re-extract DBC files for one from client build: %s",AcceptableClientBuildsListStr().c_str());
         exit(1);
@@ -665,12 +666,17 @@ TalentSpellPos const* GetTalentSpellPos(uint32 spellId)
     return &itr->second;
 }
 
-uint32 GetTalentSpellCost(uint32 spellId)
+uint32 GetTalentSpellCost(TalentSpellPos const* pos)
 {
-    if(TalentSpellPos const* pos = GetTalentSpellPos(spellId))
+    if (pos)
         return pos->rank+1;
 
     return 0;
+}
+
+uint32 GetTalentSpellCost(uint32 spellId)
+{
+    return GetTalentSpellCost(GetTalentSpellPos(spellId));
 }
 
 int32 GetAreaFlagByAreaID(uint32 area_id)
