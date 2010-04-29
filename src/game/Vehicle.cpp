@@ -493,7 +493,7 @@ void Vehicle::AddPassenger(Unit *unit, int8 seatId, bool force)
                 ((Player*)unit)->SetMoverInQueve(this);
                 ((Player*)unit)->SetClientControl(this, 1);
             }
-            if(canFly() || HasAuraType(SPELL_AURA_FLY) || HasAuraType(SPELL_AURA_MOD_INCREASE_FLIGHT_SPEED))
+            if(canFly() || HasAuraType(SPELL_AURA_FLY) || HasAuraType(SPELL_AURA_MOD_FLIGHT_SPEED))
             {
                 WorldPacket data3(SMSG_MOVE_SET_CAN_FLY, 12);
                 data3<< GetPackGUID();
@@ -669,7 +669,7 @@ void Vehicle::BuildVehicleActionBar(Player *plr) const
 
     for(CreatureSpellCooldowns::const_iterator itr = m_CreatureSpellCooldowns.begin(); itr != m_CreatureSpellCooldowns.end(); ++itr)
     {
-        time_t cooldown = (itr->second > curTime) ? (itr->second - curTime) * IN_MILISECONDS : 0;
+        time_t cooldown = (itr->second > curTime) ? (itr->second - curTime) * IN_MILLISECONDS : 0;
 
         data << uint32(itr->first);                         // spellid
         data << uint16(0);                                  // spell category?
@@ -679,7 +679,7 @@ void Vehicle::BuildVehicleActionBar(Player *plr) const
 
     for(CreatureSpellCooldowns::const_iterator itr = m_CreatureCategoryCooldowns.begin(); itr != m_CreatureCategoryCooldowns.end(); ++itr)
     {
-        time_t cooldown = (itr->second > curTime) ? (itr->second - curTime) * IN_MILISECONDS : 0;
+        time_t cooldown = (itr->second > curTime) ? (itr->second - curTime) * IN_MILLISECONDS : 0;
 
         data << uint32(itr->first);                         // spellid
         data << uint16(0);                                  // spell category?
@@ -768,6 +768,6 @@ void Vehicle::Die()
     for (SeatMap::iterator itr = m_Seats.begin(); itr != m_Seats.end(); ++itr)
         if(Unit *passenger = itr->second.passenger)
             if(((Creature*)passenger)->isVehicle())
-				((Vehicle*)passenger)->Dismiss();
+                ((Vehicle*)passenger)->Dismiss();
     RemoveAllPassengers();
 }
