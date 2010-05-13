@@ -307,12 +307,12 @@ void WorldSession::HandleCastSpellOpcode(WorldPacket& recvPacket)
     }
 
     DEBUG_LOG("WORLD: got cast spell packet, spellId - %u, cast_count: %u, unk_flags %u, data length = %i",
+        spellId, cast_count, unk_flags, (uint32)recvPacket.size());
+
     // vehicle spells are handled by CMSG_PET_CAST_SPELL,
     // but player is still able to cast own spells
     if(_player->GetCharmGUID() && _player->GetCharmGUID() == _player->GetVehicleGUID())
         mover = _player;
-
-        spellId, cast_count, unk_flags, (uint32)recvPacket.size());
 
     SpellEntry const *spellInfo = sSpellStore.LookupEntry(spellId );
 
