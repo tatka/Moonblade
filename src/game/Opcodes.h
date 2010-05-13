@@ -1248,8 +1248,8 @@ enum Opcodes
     SMSG_CALENDAR_ACTION_PENDING                    = 0x4BB, // SMSG, calendar related EVENT_CALENDAR_ACTION_PENDING
     SMSG_EQUIPMENT_SET_LIST                         = 0x4BC, // SMSG, equipment manager list?
     CMSG_EQUIPMENT_SET_SAVE                         = 0x4BD, // CMSG, lua: SaveEquipmentSet
-    CMSG_UNKNOWN_1214                               = 0x4BE, // CMSG, missle?
-    SMSG_UNKNOWN_1215                               = 0x4BF, // SMSG, uint64, uint8, 3 x float
+    CMSG_UPDATE_PROJECTILE_POSITION                 = 0x4BE, // CMSG, uint64 caster, uint32 spellId, uint8 castId, vector3 position
+    SMSG_SET_PROJECTILE_POSITION                    = 0x4BF, // SMSG, uint64 caster, uint8 castId, vector3 position
     SMSG_TALENTS_INFO                               = 0x4C0, // SMSG, talents related
     CMSG_LEARN_PREVIEW_TALENTS                      = 0x4C1, // CMSG, lua: LearnPreviewTalents (for player?)
     CMSG_LEARN_PREVIEW_TALENTS_PET                  = 0x4C2, // CMSG, lua: LearnPreviewTalents (for pet?)
@@ -1320,7 +1320,7 @@ enum Opcodes
     UMSG_UNKNOWN_1283                               = 0x503, // not found
     UMSG_UNKNOWN_1284                               = 0x504, // not found
     UMSG_UNKNOWN_1285                               = 0x505, // not found
-    SMSG_UNKNOWN_1286                               = 0x506, // ERR_CORPSE_IS_NOT_IN_INSTANCE = 0x1A8,
+    SMSG_CORPSE_IS_NOT_IN_INSTANCE                  = 0x506, // ERR_CORPSE_IS_NOT_IN_INSTANCE = 0x1A8,
     UMSG_UNKNOWN_1287                               = 0x507, // not found
     CMSG_SET_ALLOW_LOW_LEVEL_RAID1                  = 0x508, // lua: SetAllowLowLevelRaid
     CMSG_SET_ALLOW_LOW_LEVEL_RAID2                  = 0x509, // lua: SetAllowLowLevelRaid
