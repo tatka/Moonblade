@@ -1779,7 +1779,6 @@ void Spell::SetTargetMap(SpellEffectIndex effIndex, uint32 targetMode, UnitList&
             break;
         }
         case TARGET_AREAEFFECT_CUSTOM:
-		case TARGET_AREAEFFECT_CUSTOM2:
         {
             if (m_spellInfo->Effect[effIndex] == SPELL_EFFECT_PERSISTENT_AREA_AURA)
                 break;

@@ -20202,7 +20202,7 @@ bool Player::RewardSinglePlayerAtKill(Unit* pVictim)
     bool honored_kill = RewardHonor(pVictim,1);
 
     // xp and reputation only in !PvP case and not in vehicle
-    if(!PvP && !(GetVehicleGUID() && (m_SeatData.v_flags & VF_GIVE_EXP))
+    if(!PvP && !(GetVehicleGUID() && (m_SeatData.v_flags & VF_GIVE_EXP)))
     {
         RewardReputation(pVictim,1);
         GiveXP(xp, pVictim);
