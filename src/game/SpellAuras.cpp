@@ -447,7 +447,7 @@ m_isRemovedOnShapeLost(true), m_in_use(0), m_deleted(false)
 
     m_duration = m_maxduration;
 
-    DEBUG_LOG("Aura: construct Spellid : %u, Aura : %u Duration : %d Target : %d Damage : %d", m_spellProto->Id, m_spellProto->EffectApplyAuraName[eff], m_maxduration, m_spellProto->EffectImplicitTargetA[eff],damage);
+    DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "Aura: construct Spellid : %u, Aura : %u Duration : %d Target : %d Damage : %d", m_spellProto->Id, m_spellProto->EffectApplyAuraName[eff], m_maxduration, m_spellProto->EffectImplicitTargetA[eff],damage);
 
     SetModifier(AuraType(m_spellProto->EffectApplyAuraName[eff]), damage, m_spellProto->EffectAmplitude[eff], m_spellProto->EffectMiscValue[eff]);
 
@@ -2308,6 +2308,9 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
                         if (m_target->GetTypeId() == TYPEID_PLAYER)
                             ((Player*)m_target)->removeSpell(63680);
                         return;
+                    case 71342:                             // Big Love Rocket
+                        Spell::SelectMountByAreaAndSkill(m_target, 71344, 71345, 71346, 71347, 0);
+                        return;
                     case 72286:                             // Invincible
                         Spell::SelectMountByAreaAndSkill(m_target, 72281, 72282, 72283, 72284, 0);
                         return;
@@ -2483,6 +2486,16 @@ void Aura::HandleAuraDummy(bool apply, bool Real)
             {
                 // casted only at creatures at spawn
                 m_target->CastSpell(m_target, 47287, true, NULL, this);
+                return;
+            }
+            case 51870:                                     // Collect Hair Sample
+            {
+                if (Unit* pCaster = GetCaster())
+                {
+                    if (m_removeMode == AURA_REMOVE_BY_DEFAULT)
+                        pCaster->CastSpell(m_target, 51872, true, NULL, this);
+                }
+
                 return;
             }
             case 58600:                                     // Restricted Flight Area
@@ -5787,7 +5800,7 @@ void Aura::HandleModDamageDone(bool apply, bool Real)
 
 void Aura::HandleModDamagePercentDone(bool apply, bool Real)
 {
-    DEBUG_LOG("AURA MOD DAMAGE type:%u negative:%u", m_modifier.m_miscvalue, m_positive ? 0 : 1);
+    DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "AURA MOD DAMAGE type:%u negative:%u", m_modifier.m_miscvalue, m_positive ? 0 : 1);
 
     // apply item specific bonuses for already equipped weapon
     if(Real && m_target->GetTypeId() == TYPEID_PLAYER)
@@ -5850,7 +5863,7 @@ void Aura::HandleModOffhandDamagePercent(bool apply, bool Real)
     if(!Real)
         return;
 
-    DEBUG_LOG("AURA MOD OFFHAND DAMAGE");
+    DEBUG_FILTER_LOG(LOG_FILTER_SPELL_CAST, "AURA MOD OFFHAND DAMAGE");
 
     m_target->HandleStatModifier(UNIT_MOD_DAMAGE_OFFHAND, TOTAL_PCT, float(m_modifier.m_amount), apply);
 }
@@ -6366,16 +6379,8 @@ void Aura::HandleSpellSpecificBoosts(bool apply)
             break;
         case SPELLFAMILY_HUNTER:
         {
-            // The Beast Within and Bestial Wrath - immunity
-            if (GetId() == 19574 || GetId() == 34471)
-            {
-                spellId1 = 24395;
-                spellId2 = 24396;
-                spellId3 = 24397;
-                spellId4 = 26592;
-            }
             // Freezing Trap Effect
-            else if (m_spellProto->SpellFamilyFlags & UI64LIT(0x0000000000000008))
+            if (m_spellProto->SpellFamilyFlags & UI64LIT(0x0000000000000008))
             {
                 if(!apply)
                 {
@@ -6460,6 +6465,14 @@ void Aura::HandleSpellSpecificBoosts(bool apply)
             // second part of spell apply
             switch (GetId())
             {
+                case 45524:                                 // Chains of Ice
+                {
+                    if (apply)
+                        spellId1 = 55095;                   // Frost Fever
+                    else
+                        return;
+                    break;
+                }
                 case 49039: spellId1 = 50397; break;        // Lichborne
 
                 case 48263:                                 // Frost Presence
@@ -7224,6 +7237,8 @@ void Aura::PeriodicTick()
 
             DETAIL_FILTER_LOG(LOG_FILTER_PERIODIC_AFFECTS, "PeriodicTick: %u (TypeId: %u) health leech of %u (TypeId: %u) for %u dmg inflicted by %u abs is %u",
                 GUID_LOPART(GetCasterGUID()), GuidHigh2TypeId(GUID_HIPART(GetCasterGUID())), m_target->GetGUIDLow(), m_target->GetTypeId(), pdamage, GetId(),absorb);
+
+            pCaster->DealDamageMods(m_target, pdamage, &absorb);
 
             pCaster->SendSpellNonMeleeDamageLog(m_target, GetId(), pdamage, GetSpellSchoolMask(GetSpellProto()), absorb, resist, false, 0, isCrit);
 
