@@ -8272,11 +8272,10 @@ void Aura::HandleAuraControlVehicle(bool apply, bool Real)
          return;
 
     Unit* target = GetTarget();
+    Unit* caster = GetCaster();
     if (target->GetTypeId() != TYPEID_UNIT || !((Creature*)target)->isVehicle())
         return;
     Vehicle* vehicle = (Vehicle*)target;
-
-    Unit *player = GetCaster();
 
     if(!caster || !vehicle)
         return;
