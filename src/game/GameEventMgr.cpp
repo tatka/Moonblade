@@ -157,7 +157,7 @@ void GameEventMgr::LoadFromDB()
             {
                 if(!sHolidaysStore.LookupEntry(pGameEvent.holiday_id))
                 {
-                    sLog.outErrorDb("`game_event` game event id (%i) have not existed holiday id %u.",event_id,pGameEvent.holiday_id);
+                    sLog.outErrorDb("`game_event` game event id (%i) have nonexistent holiday id %u.",event_id,pGameEvent.holiday_id);
                     pGameEvent.holiday_id = HOLIDAY_NONE;
                 }
             }
@@ -605,7 +605,7 @@ void GameEventMgr::GameEventSpawn(int16 event_id)
             sObjectMgr.AddGameobjectToGrid(*itr, data);
 
             // Spawn if necessary (loaded grids only)
-            // this base map checked as non-instanced and then only existed
+            // this base map checked as non-instanced and then only existing
             Map* map = const_cast<Map*>(sMapMgr.CreateBaseMap(data->mapid));
             // We use current coords to unspawn, not spawn coords since creature can have changed grid
             if(!map->Instanceable() && map->IsLoaded(data->posX, data->posY))
@@ -739,8 +739,6 @@ void GameEventMgr::ChangeEquipOrModel(int16 event_id, bool activate)
                     {
                         pCreature->SetDisplayId(itr->second.modelid);
                         pCreature->SetNativeDisplayId(itr->second.modelid);
-                        pCreature->SetFloatValue(UNIT_FIELD_BOUNDINGRADIUS,minfo->bounding_radius);
-                        pCreature->SetFloatValue(UNIT_FIELD_COMBATREACH,minfo->combat_reach );
                     }
                 }
             }
@@ -754,8 +752,6 @@ void GameEventMgr::ChangeEquipOrModel(int16 event_id, bool activate)
                     {
                         pCreature->SetDisplayId(itr->second.modelid_prev);
                         pCreature->SetNativeDisplayId(itr->second.modelid_prev);
-                        pCreature->SetFloatValue(UNIT_FIELD_BOUNDINGRADIUS,minfo->bounding_radius);
-                        pCreature->SetFloatValue(UNIT_FIELD_COMBATREACH,minfo->combat_reach );
                     }
                 }
             }
@@ -766,7 +762,7 @@ void GameEventMgr::ChangeEquipOrModel(int16 event_id, bool activate)
             if (data2 && activate)
             {
                 CreatureInfo const *cinfo = ObjectMgr::GetCreatureTemplate(data2->id);
-                uint32 display_id = sObjectMgr.ChooseDisplayId(0,cinfo,data2);
+                uint32 display_id = Creature::ChooseDisplayId(0,cinfo,data2);
                 CreatureModelInfo const *minfo = sObjectMgr.GetCreatureModelRandomGender(display_id);
                 if (minfo)
                     display_id = minfo->modelid;
@@ -783,12 +779,12 @@ void GameEventMgr::ChangeEquipOrModel(int16 event_id, bool activate)
         CreatureData& data2 = sObjectMgr.NewOrExistCreatureData(itr->first);
         if (activate)
         {
-            data2.displayid = itr->second.modelid;
+            data2.modelid_override = itr->second.modelid;
             data2.equipmentId = itr->second.equipment_id;
         }
         else
         {
-            data2.displayid = itr->second.modelid_prev;
+            data2.modelid_override = itr->second.modelid_prev;
             data2.equipmentId = itr->second.equipement_id_prev;
         }
     }
@@ -837,6 +833,39 @@ void GameEventMgr::UpdateWorldStates(uint16 event_id, bool Activate)
             }
         }
     }
+}
+
+// Get the Game Event ID for Creature by guid
+template <>
+int16 GameEventMgr::GetGameEventId<Creature>(uint32 guid_or_poolid)
+{
+    for (uint16 i = 0; i < mGameEventCreatureGuids.size(); i++) // 0 <= i <= 2*(S := mGameEvent.size()) - 2
+        for (GuidList::const_iterator itr = mGameEventCreatureGuids[i].begin(); itr != mGameEventCreatureGuids[i].end(); itr++)
+            if (*itr == guid_or_poolid)
+                    return i + 1 - mGameEvent.size();       // -S *1 + 1 <= . <= 1*S - 1
+    return 0;
+}
+
+// Get the Game Event ID for GameObject by guid
+template <>
+int16 GameEventMgr::GetGameEventId<GameObject>(uint32 guid_or_poolid)
+{
+    for (uint16 i = 0; i < mGameEventGameobjectGuids.size(); i++)
+        for (GuidList::const_iterator itr = mGameEventGameobjectGuids[i].begin(); itr != mGameEventGameobjectGuids[i].end(); itr++)
+            if (*itr == guid_or_poolid)
+                return i + 1 - mGameEvent.size();       // -S *1 + 1 <= . <= 1*S - 1
+    return 0;
+}
+
+// Get the Game Event ID for Pool by pool ID
+template <>
+int16 GameEventMgr::GetGameEventId<Pool>(uint32 guid_or_poolid)
+{
+    for (uint16 i = 0; i < mGameEventSpawnPoolIds.size(); i++)
+        for (IdList::const_iterator itr = mGameEventSpawnPoolIds[i].begin(); itr != mGameEventSpawnPoolIds[i].end(); itr++)
+            if (*itr == guid_or_poolid)
+                return i;
+    return 0;
 }
 
 GameEventMgr::GameEventMgr()

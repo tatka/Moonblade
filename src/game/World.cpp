@@ -267,7 +267,7 @@ World::AddSession_ (WorldSession* s)
         float popu = float(GetActiveSessionCount());        // updated number of users on the server
         popu /= pLimit;
         popu *= 2;
-        loginDatabase.PExecute ("UPDATE realmlist SET population = '%f' WHERE id = '%d'", popu, realmID);
+        LoginDatabase.PExecute ("UPDATE realmlist SET population = '%f' WHERE id = '%d'", popu, realmID);
         DETAIL_LOG("Server Population (%f).", popu);
     }
 }
@@ -485,6 +485,7 @@ void World::LoadConfigSettings(bool reload)
     setConfigPos(CONFIG_FLOAT_RATE_AUCTION_TIME, "Rate.Auction.Time", 1.0f);
     setConfig(CONFIG_FLOAT_RATE_AUCTION_DEPOSIT, "Rate.Auction.Deposit", 1.0f);
     setConfig(CONFIG_FLOAT_RATE_AUCTION_CUT,     "Rate.Auction.Cut", 1.0f);
+    setConfigPos(CONFIG_UINT32_AUCTION_DEPOSIT_MIN, "Auction.Deposit.Min", SILVER);
     setConfig(CONFIG_FLOAT_RATE_HONOR, "Rate.Honor",1.0f);
     setConfigPos(CONFIG_FLOAT_RATE_MINING_AMOUNT, "Rate.Mining.Amount", 1.0f);
     setConfigPos(CONFIG_FLOAT_RATE_MINING_NEXT,   "Rate.Mining.Next", 1.0f);
@@ -680,6 +681,8 @@ void World::LoadConfigSettings(bool reload)
     setConfigMinMax(CONFIG_UINT32_QUEST_WEEKLY_RESET_WEEK_DAY, "Quests.Weekly.ResetWeekDay", 3, 0, 6);
     setConfigMinMax(CONFIG_UINT32_QUEST_WEEKLY_RESET_HOUR, "Quests.Weekly.ResetHour", 6, 0 , 23);
 
+    setConfig(CONFIG_BOOL_QUEST_IGNORE_RAID, "Quests.IgnoreRaid", false);
+
     setConfig(CONFIG_BOOL_DETECT_POS_COLLISION, "DetectPosCollision", true);
 
     setConfig(CONFIG_BOOL_RESTRICTED_LFG_CHANNEL,      "Channel.RestrictedLfg", true);
@@ -727,6 +730,8 @@ void World::LoadConfigSettings(bool reload)
     setConfig(CONFIG_BOOL_ARENA_QUEUE_ANNOUNCER_EXIT,                  "Arena.QueueAnnouncer.Exit", false);
     setConfig(CONFIG_UINT32_ARENA_SEASON_ID,                           "Arena.ArenaSeason.ID", 1);
     setConfig(CONFIG_BOOL_ARENA_SEASON_IN_PROGRESS,                    "Arena.ArenaSeason.InProgress", true);
+    setConfigMin(CONFIG_INT32_ARENA_STARTRATING,                       "Arena.StartRating", -1, -1);
+    setConfigMin(CONFIG_INT32_ARENA_STARTPERSONALRATING,               "Arena.StartPersonalRating", -1, -1);
 
     setConfig(CONFIG_BOOL_OFFHAND_CHECK_AT_TALENTS_RESET, "OffhandCheckAtTalentsReset", false);
 
@@ -847,6 +852,7 @@ void World::LoadConfigSettings(bool reload)
         sLog.outString("Using DataDir %s",m_dataPath.c_str());
     }
 
+    setConfig(CONFIG_BOOL_VMAP_INDOOR_CHECK, "vmap.enableIndoorCheck", true);
     bool enableLOS = sConfig.GetBoolDefault("vmap.enableLOS", false);
     bool enableHeight = sConfig.GetBoolDefault("vmap.enableHeight", false);
     std::string ignoreMapIds = sConfig.GetStringDefault("vmap.ignoreMapIds", "");
@@ -886,7 +892,8 @@ void World::SetInitialWorldSettings()
         ||m_configUint32Values[CONFIG_UINT32_EXPANSION] && (
         !MapManager::ExistMapAndVMap(530,10349.6f,-6357.29f) || !MapManager::ExistMapAndVMap(530,-3961.64f,-13931.2f) ) )
     {
-        sLog.outError("Correct *.map files not found in path '%smaps' or *.vmap/*vmdir files in '%svmaps'. Please place *.map/*.vmap/*.vmdir files in appropriate directories or correct the DataDir value in the mangosd.conf file.",m_dataPath.c_str(),m_dataPath.c_str());
+        sLog.outError("Correct *.map files not found in path '%smaps' or *.vmtree/*.vmtile files in '%svmaps'. Please place *.map and vmap files in appropriate directories or correct the DataDir value in the mangosd.conf file.",m_dataPath.c_str(),m_dataPath.c_str());
+        Log::WaitBeforeContinueIfNeed();
         exit(1);
     }
 
@@ -894,7 +901,10 @@ void World::SetInitialWorldSettings()
     sLog.outString();
     sLog.outString("Loading MaNGOS strings...");
     if (!sObjectMgr.LoadMangosStrings())
+    {
+        Log::WaitBeforeContinueIfNeed();
         exit(1);                                            // Error message displayed in function already
+    }
 
     ///- Update the realm entry in the database with the realm type from the config file
     //No SQL injection as values are treated as integers
@@ -902,7 +912,7 @@ void World::SetInitialWorldSettings()
     // not send custom type REALM_FFA_PVP to realm list
     uint32 server_type = IsFFAPvPRealm() ? REALM_TYPE_PVP : getConfig(CONFIG_UINT32_GAME_TYPE);
     uint32 realm_zone = getConfig(CONFIG_UINT32_REALM_ZONE);
-    loginDatabase.PExecute("UPDATE realmlist SET icon = %u, timezone = %u WHERE id = '%d'", server_type, realm_zone, realmID);
+    LoginDatabase.PExecute("UPDATE realmlist SET icon = %u, timezone = %u WHERE id = '%d'", server_type, realm_zone, realmID);
 
     ///- Remove the bones (they should not exist in DB though) and old corpses after a restart
     CharacterDatabase.PExecute("DELETE FROM corpse WHERE corpse_type = '0' OR time < (UNIX_TIMESTAMP()-'%u')", 3*DAY);
@@ -999,8 +1009,14 @@ void World::SetInitialWorldSettings()
     sLog.outString( "Loading ItemRequiredTarget...");
     sObjectMgr.LoadItemRequiredTarget();
 
+    sLog.outString( "Loading Reputation Reward Rates...");
+    sObjectMgr.LoadReputationRewardRate();
+
     sLog.outString( "Loading Creature Reputation OnKill Data..." );
     sObjectMgr.LoadReputationOnKill();
+
+    sLog.outString( "Loading Reputation Spillover Data..." );
+    sObjectMgr.LoadReputationSpilloverTemplate();
 
     sLog.outString( "Loading Points Of Interest Data..." );
     sObjectMgr.LoadPointsOfInterest();
@@ -1070,6 +1086,9 @@ void World::SetInitialWorldSettings()
 
     sLog.outString( "Loading AreaTrigger script names..." );
     sObjectMgr.LoadAreaTriggerScripts();
+
+    sLog.outString( "Loading event id script names..." );
+    sObjectMgr.LoadEventIdScripts();
 
     sLog.outString( "Loading Graveyard-zone links...");
     sObjectMgr.LoadGraveyardZones();
@@ -1226,7 +1245,10 @@ void World::SetInitialWorldSettings()
 
     sLog.outString( "Initializing Scripts..." );
     if(!LoadScriptingModule())
-        exit(1);
+    {
+        Log::WaitBeforeContinueIfNeed();
+        exit(1);                                            // Error message displayed in function already
+    }
 
     ///- Initialize game time and timers
     sLog.outString( "DEBUG:: Initialize game time and timers" );
@@ -1241,7 +1263,7 @@ void World::SetInitialWorldSettings()
     sprintf( isoDate, "%04d-%02d-%02d %02d:%02d:%02d",
         local.tm_year+1900, local.tm_mon+1, local.tm_mday, local.tm_hour, local.tm_min, local.tm_sec);
 
-    loginDatabase.PExecute("INSERT INTO uptime (realmid, starttime, startstring, uptime) VALUES('%u', " UI64FMTD ", '%s', 0)",
+    LoginDatabase.PExecute("INSERT INTO uptime (realmid, starttime, startstring, uptime) VALUES('%u', " UI64FMTD ", '%s', 0)",
         realmID, uint64(m_startTime), isoDate);
 
     m_timers[WUPDATE_OBJECTS].SetInterval(0);
@@ -1279,7 +1301,7 @@ void World::SetInitialWorldSettings()
     sMapMgr.LoadTransports();
 
     sLog.outString("Deleting expired bans..." );
-    loginDatabase.Execute("DELETE FROM ip_banned WHERE unbandate<=UNIX_TIMESTAMP() AND unbandate<>bandate");
+    LoginDatabase.Execute("DELETE FROM ip_banned WHERE unbandate<=UNIX_TIMESTAMP() AND unbandate<>bandate");
 
     sLog.outString("Calculate next daily quest reset time..." );
     InitDailyQuestResetTime();
@@ -1338,6 +1360,7 @@ void World::DetectDBCLang()
     if(default_locale >= MAX_LOCALE)
     {
         sLog.outError("Unable to determine your DBC Locale! (corrupt DBC?)");
+        Log::WaitBeforeContinueIfNeed();
         exit(1);
     }
 
@@ -1423,7 +1446,7 @@ void World::Update(uint32 diff)
         uint32 maxClientsNum = GetMaxActiveSessionCount();
 
         m_timers[WUPDATE_UPTIME].Reset();
-        loginDatabase.PExecute("UPDATE uptime SET uptime = %u, maxplayers = %u WHERE realmid = %u AND starttime = " UI64FMTD, tmpDiff, maxClientsNum, realmID, uint64(m_startTime));
+        LoginDatabase.PExecute("UPDATE uptime SET uptime = %u, maxplayers = %u WHERE realmid = %u AND starttime = " UI64FMTD, tmpDiff, maxClientsNum, realmID, uint64(m_startTime));
     }
 
     /// <li> Handle all other objects
@@ -1633,10 +1656,10 @@ void World::KickAllLess(AccountTypes sec)
 /// Ban an account or ban an IP address, duration will be parsed using TimeStringToSecs if it is positive, otherwise permban
 BanReturn World::BanAccount(BanMode mode, std::string nameOrIP, std::string duration, std::string reason, std::string author)
 {
-    loginDatabase.escape_string(nameOrIP);
-    loginDatabase.escape_string(reason);
+    LoginDatabase.escape_string(nameOrIP);
+    LoginDatabase.escape_string(reason);
     std::string safe_author=author;
-    loginDatabase.escape_string(safe_author);
+    LoginDatabase.escape_string(safe_author);
 
     uint32 duration_secs = TimeStringToSecs(duration);
     QueryResult *resultAccounts = NULL;                     //used for kicking
@@ -1646,12 +1669,12 @@ BanReturn World::BanAccount(BanMode mode, std::string nameOrIP, std::string dura
     {
         case BAN_IP:
             //No SQL injection as strings are escaped
-            resultAccounts = loginDatabase.PQuery("SELECT id FROM account WHERE last_ip = '%s'",nameOrIP.c_str());
-            loginDatabase.PExecute("INSERT INTO ip_banned VALUES ('%s',UNIX_TIMESTAMP(),UNIX_TIMESTAMP()+%u,'%s','%s')",nameOrIP.c_str(),duration_secs,safe_author.c_str(),reason.c_str());
+            resultAccounts = LoginDatabase.PQuery("SELECT id FROM account WHERE last_ip = '%s'",nameOrIP.c_str());
+            LoginDatabase.PExecute("INSERT INTO ip_banned VALUES ('%s',UNIX_TIMESTAMP(),UNIX_TIMESTAMP()+%u,'%s','%s')",nameOrIP.c_str(),duration_secs,safe_author.c_str(),reason.c_str());
             break;
         case BAN_ACCOUNT:
             //No SQL injection as string is escaped
-            resultAccounts = loginDatabase.PQuery("SELECT id FROM account WHERE username = '%s'",nameOrIP.c_str());
+            resultAccounts = LoginDatabase.PQuery("SELECT id FROM account WHERE username = '%s'",nameOrIP.c_str());
             break;
         case BAN_CHARACTER:
             //No SQL injection as string is escaped
@@ -1678,7 +1701,7 @@ BanReturn World::BanAccount(BanMode mode, std::string nameOrIP, std::string dura
         if(mode!=BAN_IP)
         {
             //No SQL injection as strings are escaped
-            loginDatabase.PExecute("INSERT INTO account_banned VALUES ('%u', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()+%u, '%s', '%s', '1')",
+            LoginDatabase.PExecute("INSERT INTO account_banned VALUES ('%u', UNIX_TIMESTAMP(), UNIX_TIMESTAMP()+%u, '%s', '%s', '1')",
                 account,duration_secs,safe_author.c_str(),reason.c_str());
         }
 
@@ -1697,8 +1720,8 @@ bool World::RemoveBanAccount(BanMode mode, std::string nameOrIP)
 {
     if (mode == BAN_IP)
     {
-        loginDatabase.escape_string(nameOrIP);
-        loginDatabase.PExecute("DELETE FROM ip_banned WHERE ip = '%s'",nameOrIP.c_str());
+        LoginDatabase.escape_string(nameOrIP);
+        LoginDatabase.PExecute("DELETE FROM ip_banned WHERE ip = '%s'",nameOrIP.c_str());
     }
     else
     {
@@ -1712,7 +1735,7 @@ bool World::RemoveBanAccount(BanMode mode, std::string nameOrIP)
             return false;
 
         //NO SQL injection as account is uint32
-        loginDatabase.PExecute("UPDATE account_banned SET active = '0' WHERE id = '%u'",account);
+        LoginDatabase.PExecute("UPDATE account_banned SET active = '0' WHERE id = '%u'",account);
     }
     return true;
 }
@@ -1900,8 +1923,8 @@ void World::_UpdateRealmCharCount(QueryResult *resultCharCount, uint32 accountId
         Field *fields = resultCharCount->Fetch();
         uint32 charCount = fields[0].GetUInt32();
         delete resultCharCount;
-        loginDatabase.PExecute("DELETE FROM realmcharacters WHERE acctid= '%d' AND realmid = '%d'", accountId, realmID);
-        loginDatabase.PExecute("INSERT INTO realmcharacters (numchars, acctid, realmid) VALUES (%u, %u, %u)", charCount, accountId, realmID);
+        LoginDatabase.PExecute("DELETE FROM realmcharacters WHERE acctid= '%d' AND realmid = '%d'", accountId, realmID);
+        LoginDatabase.PExecute("INSERT INTO realmcharacters (numchars, acctid, realmid) VALUES (%u, %u, %u)", charCount, accountId, realmID);
     }
 }
 
@@ -2005,7 +2028,7 @@ void World::SetPlayerLimit( int32 limit, bool needUpdate )
     m_playerLimit = limit;
 
     if (db_update_need)
-        loginDatabase.PExecute("UPDATE realmlist SET allowedSecurityLevel = '%u' WHERE id = '%d'",uint8(GetPlayerSecurityLimit()),realmID);
+        LoginDatabase.PExecute("UPDATE realmlist SET allowedSecurityLevel = '%u' WHERE id = '%d'",uint8(GetPlayerSecurityLimit()),realmID);
 }
 
 void World::UpdateMaxSessionCounters()

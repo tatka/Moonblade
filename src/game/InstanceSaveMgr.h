@@ -43,7 +43,6 @@ class Group;
 */
 class InstanceSave
 {
-    friend class InstanceSaveManager;
     public:
         /* Created either when:
            - any new instance is being generated
@@ -96,9 +95,17 @@ class InstanceSave
            but that would depend on a lot of things that can easily change in future */
         Difficulty GetDifficulty() { return m_difficulty; }
 
+        void SetUsedByMapState(bool state)
+        {
+            m_usedByMap = state;
+            if (!state)
+                UnloadIfEmpty();
+        }
+
+    private:
         typedef std::list<Player*> PlayerListType;
         typedef std::list<Group*> GroupListType;
-    private:
+
         bool UnloadIfEmpty();
         /* the only reason the instSave-object links are kept is because
            the object-instSave links need to be broken at reset time
@@ -110,21 +117,33 @@ class InstanceSave
         uint32 m_mapid;
         Difficulty m_difficulty;
         bool m_canReset;
+        bool m_usedByMap;                                   // true when instance map loaded
 };
+
+enum ResetEventType
+{
+    RESET_EVENT_DUNGEON      = 0,                           // no fixed reset time
+    RESET_EVENT_INFORM_1     = 1,                           // raid/heroic warnings
+    RESET_EVENT_INFORM_2     = 2,
+    RESET_EVENT_INFORM_3     = 3,
+    RESET_EVENT_INFORM_LAST  = 4,
+};
+
+#define MAX_RESET_EVENT_TYPE   5
 
 /* resetTime is a global propery of each (raid/heroic) map
     all instances of that map reset at the same time */
 struct InstanceResetEvent
 {
-    uint8 type;
-    Difficulty difficulty:8;
+    ResetEventType type   :8;                               // if RESET_EVENT_DUNGEON then InstanceID == 0 and applied to all instances for pair (map,diff)
+    Difficulty difficulty :8;                               // used with mapid used as for select reset for global cooldown instances (instamceid==0 for event)
     uint16 mapid;
-    uint16 instanceId;
+    uint32 instanceId;                                      // used for select reset for normal dungeons
 
-    InstanceResetEvent() : type(0), difficulty(DUNGEON_DIFFICULTY_NORMAL), mapid(0), instanceId(0) {}
-    InstanceResetEvent(uint8 t, uint32 _mapid, Difficulty d, uint16 _instanceid)
+    InstanceResetEvent() : type(RESET_EVENT_DUNGEON), difficulty(DUNGEON_DIFFICULTY_NORMAL), mapid(0), instanceId(0) {}
+    InstanceResetEvent(ResetEventType t, uint32 _mapid, Difficulty d, uint32 _instanceid)
         : type(t), difficulty(d), mapid(_mapid), instanceId(_instanceid) {}
-    bool operator == (const InstanceResetEvent& e) { return e.instanceId == instanceId; }
+    bool operator == (const InstanceResetEvent& e) { return e.mapid == mapid && e.difficulty == difficulty && e.instanceId == instanceId; }
 };
 
 class InstanceSaveManager;
@@ -156,7 +175,7 @@ class InstanceResetScheduler
         InstanceSaveManager& m_InstanceSaves;
 
 
-        // fast lookup for reset times (always use existed functions for access/set)
+        // fast lookup for reset times (always use existing functions for access/set)
         typedef UNORDERED_MAP<uint32 /*PAIR32(map,difficulty)*/,time_t /*resetTime*/> ResetTimeByMapDifficultyMap;
         ResetTimeByMapDifficultyMap m_resetTimeByMapDifficulty;
 
@@ -166,14 +185,10 @@ class InstanceResetScheduler
 
 class MANGOS_DLL_DECL InstanceSaveManager : public MaNGOS::Singleton<InstanceSaveManager, MaNGOS::ClassLevelLockable<InstanceSaveManager, ACE_Thread_Mutex> >
 {
-    friend class InstanceSave;
     friend class InstanceResetScheduler;
     public:
         InstanceSaveManager();
         ~InstanceSaveManager();
-
-        typedef UNORDERED_MAP<uint32 /*InstanceId*/, InstanceSave*> InstanceSaveHashMap;
-        typedef UNORDERED_MAP<uint32 /*mapId*/, InstanceSaveHashMap> InstanceSaveMapMap;
 
         void CleanupInstances();
         void PackInstances();
@@ -184,8 +199,6 @@ class MANGOS_DLL_DECL InstanceSaveManager : public MaNGOS::Singleton<InstanceSav
         void RemoveInstanceSave(uint32 InstanceId);
         static void DeleteInstanceFromDB(uint32 instanceid);
 
-        InstanceSave *GetInstanceSave(uint32 InstanceId);
-
         /* statistics */
         uint32 GetNumInstanceSaves() { return m_instanceSaveById.size(); }
         uint32 GetNumBoundPlayersTotal();
@@ -193,6 +206,11 @@ class MANGOS_DLL_DECL InstanceSaveManager : public MaNGOS::Singleton<InstanceSav
 
         void Update() { m_Scheduler.Update(); }
     private:
+        typedef UNORDERED_MAP<uint32 /*InstanceId*/, InstanceSave*> InstanceSaveHashMap;
+        typedef UNORDERED_MAP<uint32 /*mapId*/, InstanceSaveHashMap> InstanceSaveMapMap;
+
+        InstanceSave *GetInstanceSave(uint32 InstanceId);
+
         //  called by scheduler
         void _ResetOrWarnAll(uint32 mapid, Difficulty difficulty, bool warn, uint32 timeleft);
         void _ResetInstance(uint32 mapid, uint32 instanceId);
