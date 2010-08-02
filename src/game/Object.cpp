@@ -1694,7 +1694,7 @@ Vehicle* WorldObject::SummonVehicle(uint32 id, float x, float y, float z, float 
     }
 
     if (x == 0.0f && y == 0.0f && z == 0.0f)
-        GetClosePoint(x, y, z, v->GetObjectSize());
+        GetClosePoint(x, y, z, v->GetObjectBoundingRadius());
 
     v->Relocate(x, y, z, ang);
 
